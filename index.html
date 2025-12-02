@@ -188,6 +188,7 @@
     </div>
 
     <script>
+        // --- 기본 설정 ---
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
@@ -230,6 +231,7 @@
             }
         }
 
+        // --- 분석 로직 ---
         function analyzeData(data) {
             data.sort((a, b) => {
                 const dateA = new Date(a.created_at);
@@ -320,25 +322,21 @@
             const topPlayedStages = [...stageList].sort((a, b) => b.total - a.total).slice(0, 20);
             const topChurnStages = [...stageList].sort((a, b) => b.churn - a.churn).slice(0, 20);
             
-            // 테이블용: 정교한 스테이지 정렬 (Tutorial -> C_1, C_2 ... C_10)
+            // 테이블용: 정교한 스테이지 정렬
             const sortedForTable = [...stageList].sort((a, b) => {
-                // 1. 튜토리얼 우선
                 const isTutA = a.id.toLowerCase().includes('tutorial');
                 const isTutB = b.id.toLowerCase().includes('tutorial');
                 if (isTutA && !isTutB) return -1;
                 if (!isTutA && isTutB) return 1;
 
-                // 2. 숫자 추출하여 비교 (sid_c_1 vs sid_c_10 문제 해결)
                 const getNum = (str) => {
                     const match = str.match(/(\d+)/g);
-                    return match ? parseInt(match[match.length - 1]) : 999; // 마지막 숫자를 챕터 번호로 가정
+                    return match ? parseInt(match[match.length - 1]) : 999; 
                 };
-
                 const numA = getNum(a.id);
                 const numB = getNum(b.id);
-
                 if (numA !== numB) return numA - numB;
-                return a.id.localeCompare(b.id); // 숫자가 같으면 문자열 비교
+                return a.id.localeCompare(b.id);
             });
 
             updateDashboard(players, data.length, topChurnStages, topPlayedStages, sortedForTable, stageList);
@@ -373,6 +371,7 @@
                 grid: '#334155'
             };
 
+            // 1. 이탈 차트
             const churnTrace = {
                 x: churnData.map(d => d.id),
                 y: churnData.map(d => d.churn),
@@ -390,6 +389,7 @@
                 yaxis: { gridcolor: colors.grid }
             });
 
+            // 2. 밸런스 맵
             const scatterTrace = {
                 x: playedData.map(d => d.winRate),
                 y: playedData.map(d => d.kdRatio),
@@ -421,6 +421,7 @@
             };
             Plotly.newPlot('scatterChart', [scatterTrace], layoutScatter);
 
+            // 3. 플레이 타임
             const timeTrace1 = {
                 x: playedData.map(d => d.id),
                 y: playedData.map(d => (d.avgWinTime / 60).toFixed(1)), 
@@ -464,6 +465,12 @@
                 const sec = d.avgWinTime % 60;
                 const timeStr = `${min}분 ${sec}초`;
 
+                // ★ 수정된 부분: 튜토리얼일 경우 KD 비율을 '-'로 표시
+                let kdDisplay = d.kdRatio.toFixed(2);
+                if (d.id.toLowerCase().includes('tutorial')) {
+                    kdDisplay = '-';
+                }
+
                 const row = `
                     <tr>
                         <td>${i + 1}</td>
@@ -473,7 +480,7 @@
                         <td style="color:#7dd3fc;">${d.uniqueClears}명</td>
                         <td style="color:#7dd3fc; font-weight:bold;">${d.passRate.toFixed(1)}%</td>
                         <td>${d.winRate.toFixed(1)}%</td>
-                        <td>${d.kdRatio.toFixed(2)}</td>
+                        <td>${kdDisplay}</td>
                         <td>${d.attemptsPerUser.toFixed(1)}회</td>
                         <td>${statusHtml}</td>
                     </tr>
