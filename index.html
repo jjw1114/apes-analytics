@@ -102,8 +102,8 @@
                     <div class="guide-item">
                         <h4>🚧 2. 구간 통과율 (Pass Rate)</h4>
                         <span class="formula">클리어 유저 수 / 시도 유저 수</span>
-                        <p><b>"허들(Hurdle)"</b>을 측정합니다. 이 수치가 낮으면 많은 유저가 시도는 했으나 깨지 못하고 있다는 뜻입니다.</p>
-                        <span class="action-point">Action: 통과율 30% 미만은 '통곡의 벽'</span>
+                        <p><b>"허들(Hurdle)"</b>을 측정합니다. <br><b>튜토리얼은 70% 미만, 일반 맵은 30% 미만</b>이면 위험 신호입니다.</p>
+                        <span class="action-point">Action: 초반 통과율이 낮으면 난이도 하향 필수</span>
                     </div>
                     <div class="guide-item">
                         <h4>⚔️ 3. KD 비율 (재미/타격감)</h4>
@@ -188,7 +188,6 @@
     </div>
 
     <script>
-        // --- 기본 설정 ---
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
@@ -231,7 +230,6 @@
             }
         }
 
-        // --- 분석 로직 ---
         function analyzeData(data) {
             data.sort((a, b) => {
                 const dateA = new Date(a.created_at);
@@ -322,7 +320,6 @@
             const topPlayedStages = [...stageList].sort((a, b) => b.total - a.total).slice(0, 20);
             const topChurnStages = [...stageList].sort((a, b) => b.churn - a.churn).slice(0, 20);
             
-            // 테이블용: 정교한 스테이지 정렬
             const sortedForTable = [...stageList].sort((a, b) => {
                 const isTutA = a.id.toLowerCase().includes('tutorial');
                 const isTutB = b.id.toLowerCase().includes('tutorial');
@@ -371,7 +368,6 @@
                 grid: '#334155'
             };
 
-            // 1. 이탈 차트
             const churnTrace = {
                 x: churnData.map(d => d.id),
                 y: churnData.map(d => d.churn),
@@ -389,7 +385,6 @@
                 yaxis: { gridcolor: colors.grid }
             });
 
-            // 2. 밸런스 맵
             const scatterTrace = {
                 x: playedData.map(d => d.winRate),
                 y: playedData.map(d => d.kdRatio),
@@ -421,7 +416,6 @@
             };
             Plotly.newPlot('scatterChart', [scatterTrace], layoutScatter);
 
-            // 3. 플레이 타임
             const timeTrace1 = {
                 x: playedData.map(d => d.id),
                 y: playedData.map(d => (d.avgWinTime / 60).toFixed(1)), 
@@ -453,21 +447,30 @@
             tbody.innerHTML = '';
 
             data.forEach((d, i) => {
+                const isTutorial = d.id.toLowerCase().includes('tutorial');
                 let statusHtml = '';
-                if (d.passRate < 30) statusHtml += '<span class="tag tag-danger">통곡의벽</span> '; 
-                else if (d.churn / totalUsers > 0.1) statusHtml += '<span class="tag tag-danger">이탈주의</span> ';
-                
-                if (d.kdRatio < 1.0) statusHtml += '<span class="tag tag-warn">불쾌함</span> ';
-                if (d.avgFailTime < 60 && d.leaves > 2) statusHtml += '<span class="tag tag-warn">즉시이탈</span>';
+
+                if (isTutorial) {
+                    if (d.passRate < 70) statusHtml += '<span class="tag tag-danger">진행 막힘</span> ';
+                    if (d.churn / totalUsers > 0.05) statusHtml += '<span class="tag tag-danger">초반 이탈</span> ';
+                    if (d.avgWinTime > 300) statusHtml += '<span class="tag tag-warn">지루함</span> ';
+                } else {
+                    if (d.passRate < 30) statusHtml += '<span class="tag tag-danger">통곡의벽</span> '; 
+                    else if (d.churn / totalUsers > 0.1) statusHtml += '<span class="tag tag-danger">이탈주의</span> ';
+                    
+                    if (d.kdRatio < 1.0) statusHtml += '<span class="tag tag-warn">불쾌함</span> ';
+                    if (d.avgFailTime < 60 && d.leaves > 2) statusHtml += '<span class="tag tag-warn">즉시이탈</span>';
+                }
+
                 if (statusHtml === '') statusHtml = '<span class="tag tag-good">양호</span>';
 
                 const min = Math.floor(d.avgWinTime / 60);
                 const sec = d.avgWinTime % 60;
                 const timeStr = `${min}분 ${sec}초`;
 
-                // ★ 수정된 부분: 튜토리얼일 경우 KD 비율을 '-'로 표시
+                // 튜토리얼 KD 표시 제외
                 let kdDisplay = d.kdRatio.toFixed(2);
-                if (d.id.toLowerCase().includes('tutorial')) {
+                if (isTutorial) {
                     kdDisplay = '-';
                 }
 
