@@ -79,7 +79,7 @@
 <body>
     <div class="container">
         <h1>🦍 Apes Warfare <span>Data Center</span></h1>
-        <p class="subtitle">전략적 의사결정을 위한 정밀 분석 대시보드</p>
+        <p class="subtitle">Excel & CSV 호환 정밀 분석 대시보드</p>
         
         <div class="upload-box" id="dropZone">
             <span class="upload-icon">📂</span>
@@ -163,7 +163,7 @@
             </div>
 
             <div class="card">
-                <h3>📊 스테이지별 상세 성적표 (유저 허들 분석 포함)</h3>
+                <h3>📊 스테이지별 상세 성적표 (게임 진행 순서)</h3>
                 <div class="table-container">
                     <table id="dataTable">
                         <thead>
@@ -188,7 +188,6 @@
     </div>
 
     <script>
-        // --- 기본 설정 ---
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
@@ -231,7 +230,6 @@
             }
         }
 
-        // --- 분석 로직 ---
         function analyzeData(data) {
             data.sort((a, b) => {
                 const dateA = new Date(a.created_at);
@@ -321,11 +319,32 @@
 
             const topPlayedStages = [...stageList].sort((a, b) => b.total - a.total).slice(0, 20);
             const topChurnStages = [...stageList].sort((a, b) => b.churn - a.churn).slice(0, 20);
+            
+            // 테이블용: 정교한 스테이지 정렬 (Tutorial -> C_1, C_2 ... C_10)
+            const sortedForTable = [...stageList].sort((a, b) => {
+                // 1. 튜토리얼 우선
+                const isTutA = a.id.toLowerCase().includes('tutorial');
+                const isTutB = b.id.toLowerCase().includes('tutorial');
+                if (isTutA && !isTutB) return -1;
+                if (!isTutA && isTutB) return 1;
 
-            updateDashboard(players, data.length, topChurnStages, topPlayedStages, stageList);
+                // 2. 숫자 추출하여 비교 (sid_c_1 vs sid_c_10 문제 해결)
+                const getNum = (str) => {
+                    const match = str.match(/(\d+)/g);
+                    return match ? parseInt(match[match.length - 1]) : 999; // 마지막 숫자를 챕터 번호로 가정
+                };
+
+                const numA = getNum(a.id);
+                const numB = getNum(b.id);
+
+                if (numA !== numB) return numA - numB;
+                return a.id.localeCompare(b.id); // 숫자가 같으면 문자열 비교
+            });
+
+            updateDashboard(players, data.length, topChurnStages, topPlayedStages, sortedForTable, stageList);
         }
 
-        function updateDashboard(players, totalSessions, topChurn, topPlayed, allStages) {
+        function updateDashboard(players, totalSessions, topChurn, topPlayed, tableData, allStages) {
             document.getElementById('dashboard').classList.remove('hidden');
             document.getElementById('dropZone').style.display = 'none';
 
@@ -341,7 +360,7 @@
             document.getElementById('avgRetry').innerText = `${avgTry}회`;
 
             renderPlotlyCharts(topChurn, topPlayed);
-            renderTable(topChurn, totalPlayers);
+            renderTable(tableData, totalPlayers);
         }
 
         function renderPlotlyCharts(churnData, playedData) {
@@ -354,7 +373,6 @@
                 grid: '#334155'
             };
 
-            // 1. 이탈 차트
             const churnTrace = {
                 x: churnData.map(d => d.id),
                 y: churnData.map(d => d.churn),
@@ -367,18 +385,18 @@
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 font: { color: colors.text },
-                margin: { t: 10, b: 40, l: 30, r: 10 },
-                xaxis: { gridcolor: colors.grid },
+                margin: { t: 10, b: 60, l: 30, r: 10 },
+                xaxis: { gridcolor: colors.grid, tickfont: { size: 10 }, tickangle: -45, automargin: true },
                 yaxis: { gridcolor: colors.grid }
             });
 
-            // 2. 밸런스 맵
             const scatterTrace = {
                 x: playedData.map(d => d.winRate),
                 y: playedData.map(d => d.kdRatio),
                 mode: 'markers+text',
                 text: playedData.map(d => d.id),
                 textposition: 'top center',
+                textfont: { size: 9 },
                 marker: {
                     size: playedData.map(d => Math.sqrt(d.churn) * 6 + 6),
                     color: playedData.map(d => d.kdRatio),
@@ -403,17 +421,16 @@
             };
             Plotly.newPlot('scatterChart', [scatterTrace], layoutScatter);
 
-            // 3. 플레이 타임 (분 단위로 변환)
             const timeTrace1 = {
                 x: playedData.map(d => d.id),
-                y: playedData.map(d => (d.avgWinTime / 60).toFixed(1)), // 초 -> 분 변환
+                y: playedData.map(d => (d.avgWinTime / 60).toFixed(1)), 
                 name: '승리 시간 (분)',
                 type: 'bar',
                 marker: { color: colors.success }
             };
             const timeTrace2 = {
                 x: playedData.map(d => d.id),
-                y: playedData.map(d => (d.avgFailTime / 60).toFixed(1)), // 초 -> 분 변환
+                y: playedData.map(d => (d.avgFailTime / 60).toFixed(1)), 
                 name: '패배/이탈 시간 (분)',
                 type: 'bar',
                 marker: { color: colors.bar2 }
@@ -423,9 +440,9 @@
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 font: { color: colors.text },
-                margin: { t: 10, b: 40, l: 30, r: 10 },
+                margin: { t: 10, b: 60, l: 30, r: 10 }, 
                 legend: { orientation: 'h', y: 1.1 },
-                xaxis: { gridcolor: colors.grid },
+                xaxis: { gridcolor: colors.grid, tickfont: { size: 10 }, tickangle: -45, automargin: true },
                 yaxis: { gridcolor: colors.grid, title: '분 (Minute)' }
             });
         }
