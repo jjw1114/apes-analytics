@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apes Warfare : 밸런스 분석 센터</title>
+    <title>Apes Warfare : 밸런스 분석 센터 (Excel/CSV)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
     <style>
         /* 신뢰감 있는 딥 블루 & 네이비 테마 */
         :root { 
@@ -78,13 +80,13 @@
 <body>
     <div class="container">
         <h1>🦍 Apes Warfare <span>Data Center</span></h1>
-        <p class="subtitle">전략적 의사결정을 위한 정밀 분석 대시보드</p>
+        <p class="subtitle">Excel & CSV 호환 정밀 분석 대시보드</p>
         
         <div class="upload-box" id="dropZone">
             <span class="upload-icon">📂</span>
-            <h2 style="margin:0; font-size: 1.5em;">데이터 파일(CSV) 업로드</h2>
-            <p style="margin-top:10px; color: var(--info);">드래그 앤 드롭 또는 클릭하여 파일 선택</p>
-            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+            <h2 style="margin:0; font-size: 1.5em;">데이터 파일 업로드</h2>
+            <p style="margin-top:10px; color: var(--info);">지원 형식: .csv, .xlsx, .xls (드래그 앤 드롭)</p>
+            <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" style="display: none;">
         </div>
 
         <div id="dashboard" class="hidden">
@@ -95,7 +97,7 @@
                     <div class="guide-item">
                         <h4>📉 1. 이탈률 (Churn Rate)</h4>
                         <span class="formula">해당 스테이지 이탈자 / 전체 유저</span>
-                        <p>유저가 <b>"게임을 접은(Last Played)"</b> 스테이지 비율입니다. 승패와 관계없이 그 판을 마지막으로 게임을 끈 경우를 의미합니다.</p>
+                        <p>유저가 <b>"게임을 접은(Last Played)"</b> 스테이지 비율입니다. 이곳이 게임의 수명을 결정합니다.</p>
                         <span class="action-point">Action: 이탈 상위 3개 맵은 무조건 개선!</span>
                     </div>
                     <div class="guide-item">
@@ -203,19 +205,39 @@
 
         function handleFile(file) {
             if (!file) return;
-            Papa.parse(file, {
-                header: true,
-                dynamicTyping: false, 
-                skipEmptyLines: true,
-                complete: function(results) {
-                    analyzeData(results.data);
-                }
-            });
+
+            const fileName = file.name.toLowerCase();
+            if (fileName.endsWith('.csv')) {
+                // CSV 파일 처리 (PapaParse)
+                Papa.parse(file, {
+                    header: true,
+                    dynamicTyping: false, 
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        analyzeData(results.data);
+                    }
+                });
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                // 엑셀 파일 처리 (SheetJS)
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    // 엑셀 데이터를 JSON으로 변환 (헤더 포함)
+                    const json = XLSX.utils.sheet_to_json(worksheet, { raw: false }); // raw: false로 하면 날짜 등이 문자열로 변환되어 안전
+                    analyzeData(json);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert("지원하지 않는 파일 형식입니다. .csv 또는 .xlsx 파일을 올려주세요.");
+            }
         }
 
         // --- 분석 로직 ---
         function analyzeData(data) {
-            // 날짜 정렬 시 NaN 오류 방지 (안전 장치 추가됨)
+            // 날짜 정렬 시 NaN 오류 방지
             data.sort((a, b) => {
                 const dateA = new Date(a.created_at);
                 const dateB = new Date(b.created_at);
@@ -228,7 +250,8 @@
             const stages = {};  
 
             data.forEach(row => {
-                const pid = String(row.player_id).trim();
+                // 엑셀/CSV 컬럼명 매칭 (혹시 모를 공백 제거)
+                const pid = String(row.player_id || "").trim();
                 const sid = row.stage_id;
                 const result = parseInt(row.end_case); 
                 const playtime = parseInt(row.total_play_time_raw) || 0;
@@ -237,15 +260,15 @@
 
                 if (!pid || !sid || isNaN(result)) return;
 
-                players[pid] = sid; // 마지막 플레이 스테이지 업데이트 (이탈 기준)
+                players[pid] = sid; // 마지막 플레이 스테이지 업데이트
 
                 if (!stages[sid]) {
                     stages[sid] = { 
                         id: sid, total: 0, win: 0, lose: 0, leave: 0, restart: 0,
                         winTime: 0, winCount: 0, failTime: 0, failCount: 0,
                         kills: 0, deaths: 0, 
-                        uniquePlayers: new Set(), // 시도한 유저 집합
-                        uniqueWinners: new Set()  // 클리어한 유저 집합
+                        uniquePlayers: new Set(), 
+                        uniqueWinners: new Set() 
                     };
                 }
 
@@ -258,7 +281,7 @@
                     stages[sid].win++;
                     stages[sid].winTime += playtime;
                     stages[sid].winCount++;
-                    stages[sid].uniqueWinners.add(pid); // 클리어 유저 추가
+                    stages[sid].uniqueWinners.add(pid);
                 } else if (result === 1) {
                     stages[sid].lose++;
                     stages[sid].failTime += playtime;
@@ -297,9 +320,9 @@
                     avgWinTime: avgWinTime,
                     avgFailTime: avgFailTime,
                     attemptsPerUser: attemptsPerUser,
-                    uniqueAttempts: s.uniquePlayers.size,
-                    uniqueClears: s.uniqueWinners.size,
-                    passRate: passRate
+                    uniqueAttempts: s.uniquePlayers.size, 
+                    uniqueClears: s.uniqueWinners.size,   
+                    passRate: passRate                    
                 };
             });
 
