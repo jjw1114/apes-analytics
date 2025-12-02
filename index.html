@@ -67,6 +67,11 @@
         td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: #cbd5e1; }
         tr:hover td { background-color: #334155; }
         
+        /* 범례 (Legend) 스타일 */
+        .table-legend { margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border); font-size: 0.85em; color: var(--info); }
+        .legend-item { display: inline-block; margin-right: 15px; margin-bottom: 5px; }
+        .legend-item b { color: #fff; }
+
         /* 태그 */
         .tag { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 700; }
         .tag-danger { background: rgba(248, 113, 113, 0.15); color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.3); }
@@ -102,8 +107,8 @@
                     <div class="guide-item">
                         <h4>🚧 2. 구간 통과율 (Pass Rate)</h4>
                         <span class="formula">클리어 유저 수 / 시도 유저 수</span>
-                        <p><b>"허들(Hurdle)"</b>을 측정합니다. <br><b>튜토리얼은 70% 미만, 일반 맵은 30% 미만</b>이면 위험 신호입니다.</p>
-                        <span class="action-point">Action: 초반 통과율이 낮으면 난이도 하향 필수</span>
+                        <p><b>"허들(Hurdle)"</b>을 측정합니다. 이 수치가 낮으면 많은 유저가 시도는 했으나 깨지 못하고 있다는 뜻입니다.</p>
+                        <span class="action-point">Action: 통과율 30% 미만은 '통곡의 벽'</span>
                     </div>
                     <div class="guide-item">
                         <h4>⚔️ 3. KD 비율 (재미/타격감)</h4>
@@ -182,6 +187,14 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+                
+                <div class="table-legend">
+                    <span class="legend-item"><span class="tag tag-danger">통곡의벽</span> : 통과율 30% 미만 (튜토 70% 미만)</span>
+                    <span class="legend-item"><span class="tag tag-danger">이탈주의</span> : 이탈자 10% 이상 (튜토 5% 이상)</span>
+                    <span class="legend-item"><span class="tag tag-warn">불쾌함</span> : KD 1.0 미만</span>
+                    <span class="legend-item"><span class="tag tag-warn">즉시이탈</span> : 60초 미만 종료 2회 이상</span>
+                    <span class="legend-item"><span class="tag tag-warn">지루함</span> : 튜토리얼 5분 초과</span>
                 </div>
             </div>
         </div>
@@ -313,7 +326,8 @@
                     attemptsPerUser: attemptsPerUser,
                     uniqueAttempts: s.uniquePlayers.size, 
                     uniqueClears: s.uniqueWinners.size,   
-                    passRate: passRate                    
+                    passRate: passRate,
+                    leaves: s.leave
                 };
             });
 
@@ -468,7 +482,6 @@
                 const sec = d.avgWinTime % 60;
                 const timeStr = `${min}분 ${sec}초`;
 
-                // 튜토리얼 KD 표시 제외
                 let kdDisplay = d.kdRatio.toFixed(2);
                 if (isTutorial) {
                     kdDisplay = '-';
