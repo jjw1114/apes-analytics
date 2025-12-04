@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apes Warfare : 밸런스 분석 센터</title>
+    <title>Apes Warfare : 밸런스 분석 센터 (필터링 적용됨)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -67,11 +67,6 @@
         td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: #cbd5e1; }
         tr:hover td { background-color: #334155; }
         
-        /* 범례 (Legend) 스타일 */
-        .table-legend { margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border); font-size: 0.85em; color: var(--info); }
-        .legend-item { display: inline-block; margin-right: 15px; margin-bottom: 5px; }
-        .legend-item b { color: #fff; }
-
         /* 태그 */
         .tag { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 700; }
         .tag-danger { background: rgba(248, 113, 113, 0.15); color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.3); }
@@ -84,7 +79,7 @@
 <body>
     <div class="container">
         <h1>🦍 Apes Warfare <span>Data Center</span></h1>
-        <p class="subtitle">Excel & CSV 호환 정밀 분석 대시보드</p>
+        <p class="subtitle">Excel & CSV 호환 정밀 분석 대시보드 (테스트 계정 필터링 적용)</p>
         
         <div class="upload-box" id="dropZone">
             <span class="upload-icon">📂</span>
@@ -188,19 +183,22 @@
                         <tbody></tbody>
                     </table>
                 </div>
-                
-                <div class="table-legend">
-                    <span class="legend-item"><span class="tag tag-danger">통곡의벽</span> : 통과율 30% 미만 (튜토 70% 미만)</span>
-                    <span class="legend-item"><span class="tag tag-danger">이탈주의</span> : 이탈자 10% 이상 (튜토 5% 이상)</span>
-                    <span class="legend-item"><span class="tag tag-warn">불쾌함</span> : KD 1.0 미만</span>
-                    <span class="legend-item"><span class="tag tag-warn">즉시이탈</span> : 60초 미만 종료 2회 이상</span>
-                    <span class="legend-item"><span class="tag tag-warn">지루함</span> : 튜토리얼 5분 초과</span>
-                </div>
             </div>
         </div>
     </div>
 
     <script>
+        // --- 제외할 테스트 계정 ID 목록 ---
+        const excludeIds = [
+            "76561198050946461", 
+            "76561198074765139", 
+            "76561199167650417", 
+            "76561198988812383", 
+            "76561199561111092", 
+            "76561199221389233"
+        ];
+
+        // --- 기본 설정 ---
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
@@ -243,6 +241,7 @@
             }
         }
 
+        // --- 분석 로직 ---
         function analyzeData(data) {
             data.sort((a, b) => {
                 const dateA = new Date(a.created_at);
@@ -255,8 +254,18 @@
             const players = {}; 
             const stages = {};  
 
+            // 필터링된 데이터 카운트용
+            let filteredCount = 0;
+
             data.forEach(row => {
                 const pid = String(row.player_id || "").trim();
+
+                // ★ ID 블랙리스트 필터링 (제외 로직)
+                if (excludeIds.includes(pid)) {
+                    filteredCount++;
+                    return; // 건너뛰기
+                }
+
                 const sid = row.stage_id;
                 const result = parseInt(row.end_case); 
                 const playtime = parseInt(row.total_play_time_raw) || 0;
@@ -299,6 +308,8 @@
                     stages[sid].restart++;
                 }
             });
+
+            console.log(`제외된 테스트 계정 데이터: ${filteredCount}건`);
 
             const churnCounts = {};
             Object.values(players).forEach(lastStage => {
@@ -350,7 +361,7 @@
                 return a.id.localeCompare(b.id);
             });
 
-            updateDashboard(players, data.length, topChurnStages, topPlayedStages, sortedForTable, stageList);
+            updateDashboard(players, data.length - filteredCount, topChurnStages, topPlayedStages, sortedForTable, stageList);
         }
 
         function updateDashboard(players, totalSessions, topChurn, topPlayed, tableData, allStages) {
@@ -361,11 +372,13 @@
             document.getElementById('totalPlayers').innerText = totalPlayers.toLocaleString() + "명";
             document.getElementById('totalSessions').innerText = totalSessions.toLocaleString() + "판";
             
-            document.getElementById('topChurnStage').innerText = topChurn[0].id;
-            const churnRate = (topChurn[0].churn / totalPlayers * 100).toFixed(1);
-            document.getElementById('topChurnRate').innerText = `전체 유저의 ${churnRate}% 이탈`;
+            if (topChurn.length > 0) {
+                document.getElementById('topChurnStage').innerText = topChurn[0].id;
+                const churnRate = (topChurn[0].churn / totalPlayers * 100).toFixed(1);
+                document.getElementById('topChurnRate').innerText = `전체 유저의 ${churnRate}% 이탈`;
+            }
 
-            const avgTry = (allStages.reduce((sum, s) => sum + s.attemptsPerUser, 0) / allStages.length).toFixed(1);
+            const avgTry = allStages.length > 0 ? (allStages.reduce((sum, s) => sum + s.attemptsPerUser, 0) / allStages.length).toFixed(1) : 0;
             document.getElementById('avgRetry').innerText = `${avgTry}회`;
 
             renderPlotlyCharts(topChurn, topPlayed);
